@@ -1,0 +1,113 @@
+---
+title: "Same-sex households in Texas, 2020"
+author: "Kaitlan Wong"
+format: html
+editor: visual
+---
+
+```{r}
+#| message: false
+library(tidycensus)
+library(tidyverse)
+library(writexl)
+options(tigris_use_cache = TRUE)
+```
+
+```{r}
+# Map: same-sex households in Texas by county
+tx_samesex <- get_decennial(
+  geography = "county",
+  variables = c(married = "DP1_0116P",
+                cohabiting = "DP1_0118P"),
+  sumfile = "dp",
+  output = "wide",
+  year = 2020,
+  state = "TX",
+  geometry = TRUE
+) %>% 
+  mutate(percent = married + cohabiting)
+
+# Print the resulting dataset
+print(tx_samesex)
+
+map <- ggplot(tx_samesex, aes(fill = percent)) + 
+    geom_sf(color = NA) + 
+    theme_void() + 
+    scale_fill_viridis_c(option = "magma") + 
+    labs(title = "Percent Same-Sex Households in Texas by County, 2020",
+      subtitle = "Every Texan analysis of U.S. Census Bureau 2020 DHC and DP files",
+      fill = "Percent")
+
+# Display the statewide map
+print(map)
+
+# Save the statewide map
+ggsave(filename = "same_sex_households_tx.png", plot = map, dpi = 300)
+
+```
+
+```{r}
+# Function to create map by tract for select counties
+create_county_map <- function(county_name) {
+  print(paste("Creating map for", county_name, "County"))
+  
+  county_samesex <- get_decennial(
+    geography = "tract",
+    variables = c(married = "DP1_0116P",
+                  cohabiting = "DP1_0118P"),
+    sumfile = "dp",
+    output = "wide",
+    year = 2020,
+    state = "TX",
+    county = county_name,
+    geometry = TRUE
+  )
+  
+  print(county_samesex)
+  
+  county_samesex <- county_samesex %>%
+    dplyr::mutate(percent = married + cohabiting)
+
+  ggplot(county_samesex, aes(fill = percent)) + 
+    geom_sf(color = NA) + 
+    theme_void() + 
+    scale_fill_viridis_c(option = "magma") + 
+    labs(title = paste("Percent Same-Sex Households in", county_name, "County, 2020"),
+         subtitle = "Every Texan analysis of U.S. Census Bureau 2020 DHC and DP files",
+         fill = "Percent")
+}
+
+# Create maps for multiple counties
+counties <- c("Travis", "Dallas", "Bexar")  # Add more counties as needed
+
+for (county in counties) {
+  tryCatch({
+    map <- create_county_map(county)
+    print(map)
+  }, error = function(e) {
+    print(paste("Error in creating map for", county, ":"))
+    print(e)
+  })
+}
+
+# Save maps of selected counties
+counties <- c("Travis", "Dallas", "Bexar")
+
+for (county in counties) {
+  map <- create_county_map(county)
+  filename <- paste(county, "map.png", sep = "_")
+  ggsave(filename, map, dpi = 300)
+}
+```
+
+```{r}
+# Sort the dataset by percent in descending order
+tx_samesex_sorted <- tx_samesex[order(-tx_samesex$percent), ]
+
+# Convert to data frame
+tx_samesex_sorted <- as.data.frame(tx_samesex_sorted)
+
+# Export the sorted dataset to an Excel file
+write_xlsx(tx_samesex_sorted, path = "same_sex_households_by_county.xlsx", col_names = TRUE)
+
+```
